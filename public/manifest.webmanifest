@@ -1,0 +1,22 @@
+{
+  "name": "Actes de la Penya",
+  "short_name": "Actes Penya",
+  "description": "Aplicacio personal per crear actes de reunions de penyes de futbol.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#143d2f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

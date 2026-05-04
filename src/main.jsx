@@ -255,14 +255,17 @@ async function downloadPdf(minutes, members = DEFAULT_MEMBERS) {
   inlineLabel('Hora de finalització:', minutes.endTime, marginX);
   y += line + 1;
 
-  addPageIfNeeded(32);
-  y += 10;
+  const signatureY = pageHeight - 28;
+  if (y > signatureY - 16) {
+    doc.addPage();
+    drawHeader();
+  }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11.2);
-  doc.text('Signatura del/la', marginX, y);
-  doc.text('president/a: ______________________', marginX, y + 5);
-  doc.text('Signatura del/la', 125, y);
-  doc.text('secretari/a:___________', 125, y + 5);
+  doc.text(`Signatura del/la president/a: ${minutes.president || '-'}`, marginX, signatureY);
+  doc.line(marginX, signatureY + 8, marginX + 72, signatureY + 8);
+  doc.text(`Signatura del/la secretari/a: ${minutes.secretary || '-'}`, 118, signatureY);
+  doc.line(118, signatureY + 8, pageWidth - marginX, signatureY + 8);
 
   doc.save(`acta-penya-${safeFileDate(minutes.date)}.pdf`);
 }

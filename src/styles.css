@@ -132,6 +132,26 @@ h2 {
   color: #17201b;
 }
 
+.error-panel {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid #ded7c8;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.error-panel h1 {
+  max-width: 100%;
+  margin-bottom: 0;
+  font-size: 1.8rem;
+}
+
+.error-panel p {
+  margin-bottom: 0;
+  color: #59635c;
+}
+
 .minutes-list {
   display: grid;
   gap: 12px;

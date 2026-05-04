@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Component, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { jsPDF } from 'jspdf';
 import './styles.css';
@@ -28,14 +28,39 @@ const DEFAULT_MEMBERS = [
   'Gerard Mayo Obando',
 ];
 
+function createId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function readStorage(key, fallback) {
+  try {
+    const value = globalThis.localStorage?.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch (error) {
+    console.warn(`No s'ha pogut llegir ${key}`, error);
+    return fallback;
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    globalThis.localStorage?.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.warn(`No s'ha pogut guardar ${key}`, error);
+    return false;
+  }
+}
+
 const emptyVoteOption = () => ({
-  id: crypto.randomUUID(),
+  id: createId(),
   label: '',
   votes: '',
 });
 
 const emptyAgendaItem = () => ({
-  id: crypto.randomUUID(),
+  id: createId(),
   title: '',
   discussion: '',
   hasVote: false,
@@ -43,7 +68,7 @@ const emptyAgendaItem = () => ({
 });
 
 const emptyMinutes = () => ({
-  id: crypto.randomUUID(),
+  id: createId(),
   penyaName: PENYA_NAME,
   meetingNumber: '',
   meetingTitle: '',
@@ -61,33 +86,26 @@ const emptyMinutes = () => ({
 });
 
 function loadMinutes() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
+  const minutes = readStorage(STORAGE_KEY, []);
+  return Array.isArray(minutes) ? minutes : [];
 }
 
 function saveMinutes(items) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  writeStorage(STORAGE_KEY, items);
 }
 
 function loadMembers() {
-  try {
-    const savedMembers = JSON.parse(localStorage.getItem(MEMBERS_STORAGE_KEY)) || [];
-    return [...new Set([...DEFAULT_MEMBERS, ...savedMembers])];
-  } catch {
-    return DEFAULT_MEMBERS;
-  }
+  const savedMembers = readStorage(MEMBERS_STORAGE_KEY, []);
+  return [...new Set([...DEFAULT_MEMBERS, ...(Array.isArray(savedMembers) ? savedMembers : [])])];
 }
 
 function saveMembers(members) {
   const customMembers = members.filter((member) => !DEFAULT_MEMBERS.includes(member));
-  localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(customMembers));
+  writeStorage(MEMBERS_STORAGE_KEY, customMembers);
 }
 
 function splitPeople(value) {
-  return value
+  return String(value || '')
     .split(/\n|,/)
     .map((person) => person.trim())
     .filter(Boolean);
@@ -116,7 +134,10 @@ function presentMembersFor(minutes, members = DEFAULT_MEMBERS) {
     return minutes.presentMembers;
   }
   const legacyAttendees = new Set(splitPeople(minutes.attendees));
-  return Object.fromEntries(membersForMinutes(minutes, members).map((member) => [member, legacyAttendees.has(member)]));
+  return membersForMinutes(minutes, members).reduce((accumulator, member) => {
+    accumulator[member] = legacyAttendees.has(member);
+    return accumulator;
+  }, {});
 }
 
 function attendeesFor(minutes, members = DEFAULT_MEMBERS) {
@@ -135,6 +156,37 @@ function countAttendees(minutes, members = DEFAULT_MEMBERS) {
 
 function safeFileDate(value) {
   return value || new Date().toISOString().slice(0, 10);
+}
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Error de l app', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="app-shell">
+          <section className="error-panel">
+            <h1>No s'ha pogut obrir l'app</h1>
+            <p>Recarrega la pagina. Si continua passant, esborra les dades del lloc a Safari i torna a obrir-la.</p>
+            <button className="primary-button" onClick={() => window.location.reload()}>Recarregar</button>
+          </section>
+        </main>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 async function downloadPdf(minutes, members = DEFAULT_MEMBERS) {
@@ -341,6 +393,15 @@ function App() {
 }
 
 function Home({ minutesList, onCreate, onOpen, onDelete, onDownload, members }) {
+  const handleDownload = async (minutes) => {
+    try {
+      await onDownload(minutes);
+    } catch (error) {
+      console.error('No s ha pogut generar el PDF', error);
+      alert('No s ha pogut generar el PDF. Torna-ho a provar.');
+    }
+  };
+
   return (
     <>
       <section className="hero">
@@ -361,7 +422,7 @@ function Home({ minutesList, onCreate, onOpen, onDelete, onDownload, members }) 
           <div className="minutes-list">
             {minutesList.map((minutes) => (
               <article className="minutes-card" key={minutes.id}>
-                <button className="download-icon-button" onClick={() => onDownload(minutes)} aria-label="Descarregar PDF">
+                <button className="download-icon-button" onClick={() => handleDownload(minutes)} aria-label="Descarregar PDF">
                   <DownloadIcon />
                 </button>
                 <div>
@@ -599,10 +660,31 @@ function DownloadIcon() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+const rootElement = document.getElementById('root');
+
+try {
+  createRoot(rootElement).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+} catch (error) {
+  console.error('No s ha pogut iniciar React', error);
+  rootElement.innerHTML = `
+    <main class="app-shell">
+      <section class="error-panel">
+        <h1>No s'ha pogut obrir l'app</h1>
+        <p>Recarrega la pagina. Si continua passant, esborra les dades del lloc a Safari.</p>
+        <button class="primary-button" onclick="window.location.reload()">Recarregar</button>
+      </section>
+    </main>
+  `;
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.warn('No s ha pogut registrar el service worker', error);
+    });
   });
 }
